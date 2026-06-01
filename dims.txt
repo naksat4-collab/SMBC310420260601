@@ -1,0 +1,6 @@
+/Users/nakao.satoshi/Downloads/TEMP/SMBC/GIT2/assets/IMG_14MAIN.png
+  pixelWidth: 1408
+  pixelHeight: 3054
+/Users/nakao.satoshi/Downloads/TEMP/SMBC/GIT2/assets/IMG_14LP.PNG
+  pixelWidth: 1179
+  pixelHeight: 8797

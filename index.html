@@ -1,0 +1,574 @@
+<!DOCTYPE html>
+<html lang="ja">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport"
+        content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <title>三井住友銀行</title>
+
+    <!-- アプリアイコン設定 -->
+    <link rel="apple-touch-icon" href="assets/icon.PNG">
+
+    <!-- モバイル実機・ホーム画面追加用メタタグ -->
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <style>
+        :root {
+            --iphone-width: 393px;
+            --iphone-height: 852px;
+            --safe-top: env(safe-area-inset-top, 0px);
+            --safe-bottom: env(safe-area-inset-bottom, 0px);
+        }
+
+        * {
+            box-sizing: border-box;
+            -webkit-tap-highlight-color: transparent;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            margin: 0;
+            padding: 0;
+            /* ユーザーによる意図しないズームや選択を防止 */
+            touch-action: manipulation;
+            user-select: none;
+        }
+
+        body {
+            background-color: #000;
+            display: flex;
+            justify-content: center;
+            align-items: flex-start;
+            /* 上端から配置 */
+            min-height: 100vh;
+            overflow: hidden;
+            overscroll-behavior: none;
+            /* スワイプで画面サイズが変わらないように固定 */
+            position: fixed;
+            width: 100%;
+            height: 100%;
+        }
+
+        #iphone-frame {
+            width: var(--iphone-width);
+            background-color: #fff;
+            position: relative;
+            overflow: hidden;
+            box-shadow: 0 0 50px rgba(0, 0, 0, 0.5);
+            transition: transform 0.1s ease;
+            transform-origin: top center;
+            /* 上端中央を基点にスケール */
+            /* スワイプ操作によるブラウザ挙動を抑制しつつタップを阻害しない */
+            touch-action: manipulation;
+        }
+
+        .screen {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            display: none;
+            background-size: cover;
+            background-position: center top 54px;
+            /* アイランド分だけ下にずらす */
+            background-repeat: no-repeat;
+        }
+
+        .screen.active {
+            display: block;
+        }
+
+        /* Status Bar (iPhone 15 Pro size: 54px) */
+        #status-bar {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 54px;
+            z-index: 10000;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 0 28px;
+            color: #fff;
+            font-size: 15px;
+            font-weight: 600;
+            pointer-events: none;
+            /* 実機で2重表示を防ぐために非表示 */
+            opacity: 0;
+        }
+
+        /* Dynamic Island */
+        #dynamic-island {
+            position: absolute;
+            top: 11px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 125px;
+            height: 37px;
+            background-color: #000;
+            border-radius: 20px;
+            z-index: 10001;
+            /* 実機で二重表示を防ぐために非表示 */
+            opacity: 0;
+            pointer-events: none;
+        }
+
+        #status-bar .left-area {
+            display: flex;
+            align-items: center;
+            gap: 4px;
+        }
+
+        .time-text-status {
+            margin-right: 2px;
+        }
+
+        .location-icon {
+            width: 12px;
+            height: 12px;
+            background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='white'%3E%3Cpath d='M12 2L4.5 20.29l.71.71L12 18l6.79 3 .71-.71z'/%3E%3C/svg%3E");
+            background-size: contain;
+            background-repeat: no-repeat;
+            transform: rotate(45deg);
+        }
+
+        /* 黒文字モード（内部計算用） */
+        #status-bar.black-text {
+            color: #000 !important;
+        }
+
+        #status-bar.black-text .location-icon {
+            background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='black'%3E%3Cpath d='M12 2L4.5 20.29l.71.71L12 18l6.79 3 .71-.71z'/%3E%3C/svg%3E");
+        }
+
+        #status-bar .right-icons {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .signal-bar {
+            width: 3px;
+            background: currentColor;
+            border-radius: 0.5px;
+            opacity: 0.4;
+        }
+
+        .signal-bar.active {
+            opacity: 1;
+        }
+
+        .wifi-svg {
+            width: 16px;
+            height: 12px;
+            margin-left: 2px;
+            fill: currentColor;
+        }
+
+        .battery-container {
+            position: relative;
+            width: 25px;
+            height: 12px;
+            border: 1px solid currentColor;
+            border-radius: 2.5px;
+            display: flex;
+            align-items: center;
+            padding: 1px;
+            margin-left: 2px;
+        }
+
+        .battery-container::after {
+            content: '';
+            position: absolute;
+            right: -3.5px;
+            top: 3px;
+            width: 2px;
+            height: 4.5px;
+            background: currentColor;
+            border-radius: 0 1px 1px 0;
+            opacity: 0.6;
+        }
+
+        .battery-level-bar {
+            height: 100%;
+            background: currentColor;
+            border-radius: 0.5px;
+        }
+
+        .battery-text-inside {
+            position: absolute;
+            width: 100%;
+            text-align: center;
+            font-size: 8px;
+            font-weight: 800;
+            left: 0;
+            top: 0;
+            line-height: 11px;
+        }
+
+        .clickable {
+            position: absolute;
+            cursor: pointer;
+            z-index: 100;
+            /* デバッグ時に領域を確認したい場合は背景色をつける */
+            background-color: rgba(255, 0, 0, 0);
+        }
+
+        /* SCREEN_14_MEISAI Layout */
+        #screen-14-meisai {
+            display: none;
+            flex-direction: column;
+            background-color: #f7f7f7;
+            /* スクロール領域があるため touch-action を調整 */
+            touch-action: pan-y;
+            overscroll-behavior-y: none;
+            /* 下スワイプ時の余白防止 */
+        }
+
+        #screen-14-meisai.active {
+            display: flex;
+        }
+
+        #header-14 {
+            width: 100%;
+            height: auto;
+            position: relative;
+            z-index: 10;
+            /* 明細画像との境界に僅かな隙間が出ないよう1px重ねる */
+            margin-bottom: -1px;
+        }
+
+        #scroll-area-14 {
+            flex: 1;
+            overflow-y: scroll;
+            width: 100%;
+            scrollbar-width: none;
+            touch-action: pan-y;
+            -webkit-overflow-scrolling: touch;
+            overscroll-behavior-y: none;
+            /* 下スワイプ時の余白防止 */
+        }
+
+        #scroll-area-14::-webkit-scrollbar {
+            display: none;
+        }
+
+        #footer-14,
+        #footer-57 {
+            width: 100%;
+            height: auto;
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            z-index: 1001;
+        }
+
+        /* 文字重なり防止のための余白 (ステータスバー分) */
+        .screen {
+            padding-top: 54px;
+        }
+
+        /* 明細画面等は画像自体がヘッダーを含んでいる場合があるため調整可能にする */
+        #screen-14-meisai,
+        #screen-57-meisai {
+            padding-top: 0;
+            background-position: center top;
+            /* 明細は画像上端を合わせる */
+        }
+
+        #scroll-area-14,
+        #scroll-area-57 {
+            flex: 1;
+            overflow-y: scroll;
+            width: 100%;
+            scrollbar-width: none;
+            touch-action: pan-y;
+            -webkit-overflow-scrolling: touch;
+            overscroll-behavior-y: none;
+            position: relative;
+            /* 子要素の absolute 配置用 */
+        }
+
+        #scroll-area-14::-webkit-scrollbar,
+        #scroll-area-57::-webkit-scrollbar {
+            display: none;
+        }
+
+        .meisai-img {
+            width: 100%;
+            display: block;
+        }
+
+        .scroll-content {
+            position: relative;
+            width: 100%;
+        }
+
+        /* 時刻オーバーレイ共通設定 */
+        #header-time-overlay,
+        #meisai-57-time-overlay {
+            position: absolute;
+            font-size: 12px;
+            /* 画像のテキストサイズに近似 */
+            color: #fff;
+            font-weight: 500;
+            z-index: 10;
+        }
+
+        /* Screen 14用配置 */
+        #header-time-overlay {
+            top: 11px; 
+            /* 「現在」の高さに精密に合わせる */
+            left: 42px;
+            /* アイコンと「現在」の中間（半角2文字分左へ移動） */
+        }
+
+        /* Screen 57用配置 (画像内の「現在」に合わせる) */
+        #meisai-57-time-overlay {
+            top: 120px;
+            /* 1文字分(12px)上に移動しました (旧: 132px) */
+            left: 59px;
+            /* アイコンと「現在」の中間 */
+        }
+
+        .logout-btn-area {
+            position: absolute;
+            top: 360px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 300px;
+            height: 50px;
+            cursor: pointer;
+            z-index: 100;
+        }
+    </style>
+</head>
+
+<body>
+
+    <div id="iphone-frame">
+        <!-- Dynamic Island -->
+        <div id="dynamic-island"></div>
+
+        <!-- Global Status Bar -->
+        <div id="status-bar">
+            <div class="left-area">
+                <span class="time-text-status">09:41</span>
+            </div>
+            <div class="right-icons">
+                <div class="signal-bar active" style="height: 4px;"></div>
+                <div class="signal-bar active" style="height: 6px;"></div>
+                <div class="signal-bar active" style="height: 8px;"></div>
+                <div class="signal-bar active" style="height: 10px;"></div>
+                <svg class="wifi-svg" viewBox="0 0 24 24">
+                    <path
+                        d="M12,21L15.6,16.2C14.6,15.45 13.35,15 12,15C10.65,15 9.4,15.45 8.4,16.2L12,21M12,3C7.95,3 4.21,4.34 1.2,6.6L3,8.85C5.5,6.97 8.62,5.85 12,5.85C15.38,5.85 18.5,6.97 21,8.85L22.8,6.6C19.79,4.34 16.05,3 12,3M12,9C9.3,9 6.81,9.89 4.8,11.4L6.6,13.65C8.1,12.55 9.97,11.85 12,11.85C14.03,11.85 15.9,12.55 17.4,13.65L19.2,11.4C17.19,9.89 14.7,9 12,9Z" />
+                </svg>
+                <div class="battery-container">
+                    <div class="battery-level-bar" style="width: 85%;"></div>
+                    <span class="battery-text-inside">85</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- SCREEN_MAIN (ログイン画面) -->
+        <div id="screen-main" class="screen active"
+            style="background-image: url('assets/IMG_SMBCMAIN.PNG'); background-color: #00462d;">
+            <!-- 契約者情報のカード位置 (重なり防止のため top+54px) -->
+            <div class="clickable" style="top: 164px; left: 16px; width: 361px; height: 75px; z-index: 1000;"
+                onclick="showScreen('screen-14-main')"></div>
+            <div class="clickable" style="top: 241px; left: 16px; width: 361px; height: 75px; z-index: 1000;"
+                onclick="showScreen('screen-57-main')"></div>
+
+            <input type="text" id="login-input"
+                style="position: absolute; top: 454px; left: 50px; width: 293px; height: 40px; opacity: 0;">
+            <!-- 中央の予備ボタン (top+54px) -->
+            <div class="clickable" style="top: 504px; left: 50px; width: 293px; height: 50px; z-index: 1000;"
+                onclick="handleLogin()">
+            </div>
+        </div>
+
+        <!-- SCREEN_14_MAIN -->
+        <div id="screen-14-main" class="screen"
+            style="background-image: url('assets/IMG_14MAIN.png?v=20260601170900'); background-color: #004731;">
+            <!-- 左下タップでメイン画面（IMG_SMBCMAIN.PNG）に戻る -->
+            <div class="clickable" style="bottom: 0; left: 0; width: 100px; height: 100px; z-index: 1000;"
+                onclick="showScreen('screen-main')"></div>
+            <div class="clickable" style="top: 170px; left: 16px; width: 361px; height: 200px; z-index: 1000;"
+                onclick="showScreen('screen-14-meisai')"></div>
+        </div>
+
+        <!-- SCREEN_14_MEISAI -->
+        <div id="screen-14-meisai" class="screen">
+            <!-- 左上タップでメイン画面（IMG_14MAIN.png）に戻る -->
+            <div class="clickable" style="top: 54px; left: 0; width: 80px; height: 60px; z-index: 1000;"
+                onclick="showScreen('screen-14-main')"></div>
+            <div id="header-14">
+                <img src="assets/IMG_HEADER.PNG" class="meisai-img">
+            </div>
+            <div id="scroll-area-14">
+                <div class="scroll-content">
+                    <!-- 明細ヘッダーの上に現在時刻を重ねる (スクロール連動) -->
+                    <div id="header-time-overlay">00:00</div>
+                    <img src="assets/IMG_14LP.png?v=20260601170900" class="meisai-img">
+                </div>
+            </div>
+            <div id="footer-14">
+                <img src="assets/IMG_FOTER.PNG" class="meisai-img">
+                <div class="clickable" style="bottom: 0px; right: 0px; width: 80px; height: 80px;"
+                    onclick="showScreen('screen-14-logout')"></div>
+            </div>
+        </div>
+
+        <!-- SCREEN_14_LOGOUT -->
+        <div id="screen-14-logout" class="screen"
+            style="background-image: url('assets/IMG_14LOGOUT.PNG'); background-position: center top; background-color: #f7f7f7;">
+            <!-- 右上の赤いログアウトボタン -->
+            <div class="clickable" style="top: 130px; right: 15px; width: 100px; height: 60px; z-index: 1000;"
+                onclick="showScreen('screen-14-logoutyn')"></div>
+        </div>
+
+        <!-- SCREEN_14_LOGOUTYN -->
+        <div id="screen-14-logoutyn" class="screen"
+            style="background-image: url('assets/IMG_14LOGOOUTYN.PNG'); background-position: center top; background-color: #f7f7f7;">
+            <div class="clickable"
+                style="top:450px; left:50%; transform:translateX(-50%); width:200px; height:50px; z-index: 1000;"
+                onclick="showScreen('screen-main')"></div>
+        </div>
+
+        <!-- SCREEN_57_MAIN -->
+        <div id="screen-57-main" class="screen"
+            style="background-image: url('assets/IMG_57MAIN.PNG'); background-color: #00462d;">
+            <!-- 左上タップでメイン画面（IMG_SMBCMAIN.PNG）に戻る -->
+            <div class="clickable" style="top: 0; left: 0; width: 100px; height: 100px; z-index: 1000;"
+                onclick="showScreen('screen-main')"></div>
+            <!-- 左下タップでメイン画面（IMG_SMBCMAIN.PNG）に戻る -->
+            <div class="clickable" style="bottom: 0; left: 0; width: 100px; height: 100px; z-index: 1000;"
+                onclick="showScreen('screen-main')"></div>
+            <div class="clickable" style="top: 250px; left: 20px; width: 353px; height: 120px; z-index: 1000;"
+                onclick="showScreen('screen-57-meisai')"></div>
+        </div>
+
+        <!-- SCREEN_57_MEISAI -->
+        <div id="screen-57-meisai" class="screen">
+            <!-- 左上タップでメイン画面（IMG_57MAIN.PNG）に戻る -->
+            <div class="clickable" style="top: 54px; left: 0; width: 80px; height: 60px; z-index: 1000;"
+                onclick="showScreen('screen-57-main')"></div>
+            <div id="scroll-area-57">
+                <div class="scroll-content">
+                    <div id="meisai-57-time-overlay">00:00</div>
+                    <img src="assets/IMG_57MEISAI.PNG" class="meisai-img">
+                </div>
+            </div>
+            <div id="footer-57">
+                <img src="assets/IMG_FOTER.PNG" class="meisai-img">
+                <div class="clickable" style="bottom: 0px; right: 0px; width: 80px; height: 80px;"
+                    onclick="showScreen('screen-57-logout')"></div>
+            </div>
+        </div>
+
+        <!-- SCREEN_57_LOGOUT -->
+        <div id="screen-57-logout" class="screen"
+            style="background-image: url('assets/IMG_57LOGOUT.PNG'); background-position: center top; background-color: #f7f7f7;">
+            <!-- 右上の赤いログアウトボタン -->
+            <div class="clickable" style="top: 110px; right: 15px; width: 100px; height: 60px; z-index: 1000;"
+                onclick="showScreen('screen-57-logoutyn')"></div>
+        </div>
+
+        <!-- SCREEN_57_LOGOUTYN -->
+        <div id="screen-57-logoutyn" class="screen"
+            style="background-image: url('assets/IMG_57LOGOUTYN.PNG'); background-position: center top; background-color: #f7f7f7;">
+            <div class="clickable"
+                style="top:450px; left:50%; transform:translateX(-50%); width:200px; height:50px; z-index: 1000;"
+                onclick="showScreen('screen-main')"></div>
+        </div>
+    </div>
+
+    <script>
+        // ビューポートサイズに合わせて精密にスケーリング
+        function adjustScale() {
+            const frame = document.getElementById('iphone-frame');
+            const vw = window.innerWidth;
+            const vh = window.innerHeight;
+
+            // 横幅を画面にピッタリ合わせ、左右の枠を消す
+            const scale = vw / 393;
+            frame.style.transform = `scale(${scale})`;
+
+            // 論理的な高さを計算して、フッターが下に来るようにする
+            // 物理高さ vh に対してスケールを逆算した値を設定
+            frame.style.height = (vh / scale) + 'px';
+
+            // コンテンツを画面上端に固定
+            document.body.style.width = vw + 'px';
+            document.body.style.height = vh + 'px';
+        }
+
+        function showScreen(screenId) {
+            document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+            const target = document.getElementById(screenId);
+            if (target) {
+                target.classList.add('active');
+                // スクロール位置をリセット
+                const scrollArea14 = target.querySelector('#scroll-area-14');
+                const scrollArea57 = target.querySelector('#scroll-area-57');
+                if (scrollArea14) scrollArea14.scrollTop = 0;
+                if (scrollArea57) scrollArea57.scrollTop = 0;
+            }
+
+            const lightScreens = [
+                'screen-14-meisai', 'screen-57-meisai',
+                'screen-14-logout', 'screen-57-logout',
+                'screen-14-logoutyn', 'screen-57-logoutyn'
+            ];
+            const statusBar = document.getElementById('status-bar');
+            if (lightScreens.includes(screenId)) {
+                // 白・グレー背景用（黒文字）
+                statusBar.classList.add('black-text');
+                document.querySelector('meta[name="apple-mobile-web-app-status-bar-style"]').setAttribute("content", "default");
+            } else {
+                // 緑背景用（白文字）
+                statusBar.classList.remove('black-text');
+                document.querySelector('meta[name="apple-mobile-web-app-status-bar-style"]').setAttribute("content", "black-translucent");
+            }
+        }
+
+        function handleLogin() {
+            const input = document.getElementById('login-input').value;
+            if (input.startsWith('01533')) {
+                showScreen('screen-14-main');
+            } else if (input.startsWith('01705')) {
+                showScreen('screen-57-main');
+            } else {
+                showScreen('screen-14-main');
+            }
+        }
+
+        function syncSystemStatus() {
+            const now = new Date();
+            const time = now.getHours().toString().padStart(2, '0') + ':' + now.getMinutes().toString().padStart(2, '0');
+            document.querySelectorAll('.time-text-status, #header-time-overlay, #meisai-57-time-overlay').forEach(el => el.innerText = time);
+        }
+
+        // リサイズ・向き変更時に即座にスケール追従
+        window.addEventListener('resize', adjustScale);
+        window.addEventListener('orientationchange', () => {
+            setTimeout(adjustScale, 200);
+        });
+
+        document.addEventListener('DOMContentLoaded', () => {
+            adjustScale();
+            showScreen('screen-main');
+
+            // 二本指タップなどによるズームを防止
+            document.addEventListener('touchstart', (e) => {
+                if (e.touches.length > 1) e.preventDefault();
+            }, { passive: false });
+        });
+
+        setInterval(syncSystemStatus, 1000);
+        syncSystemStatus();
+    </script>
+</body>
+
+</html>
